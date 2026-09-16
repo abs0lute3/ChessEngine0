@@ -108,6 +108,30 @@
   .bar > div{height:100%;background:var(--green);width:0;transition:width .2s}
   .tiny{font-size:11.5px;color:var(--muted);line-height:1.55;margin-top:8px}
   .tiny a{color:#8fc36a}
+  /* password gate */
+  #gate{position:fixed;inset:0;background:var(--bg);display:flex;align-items:center;justify-content:center;z-index:99}
+  #gate .box{background:var(--panel);padding:30px;border-radius:10px;width:320px;text-align:center}
+  #gate input{width:100%;padding:11px;border-radius:6px;border:1px solid var(--line);background:var(--panel-2);color:var(--txt);margin-top:14px;text-align:center;letter-spacing:.3em}
+  #gate .err{color:var(--blunder);font-size:12px;height:16px;margin-top:8px}
+  #gate h1{font-size:16px;margin:14px 0 0;letter-spacing:.04em}
+  /* captured-piece trays */
+  .board-stack{display:flex;flex-direction:column;gap:6px}
+  .tray{min-height:30px;display:flex;align-items:center;flex-wrap:wrap;max-width:min(78vw,560px)}
+  .tray img{width:26px;height:26px;margin-left:-9px;filter:drop-shadow(0 1px 1px rgba(0,0,0,.4))}
+  .tray img:first-child{margin-left:0}
+  .tray .mat{font-size:12px;color:var(--muted);font-weight:700;margin-left:8px}
+  /* arrows */
+  #arrows{position:absolute;inset:0;z-index:7;pointer-events:none}
+  /* live move-marker toast */
+  #moveToast{position:absolute;left:50%;top:42%;transform:translate(-50%,-50%) scale(.8);z-index:65;font-weight:900;font-size:clamp(22px,5vw,40px);pointer-events:none;opacity:0;text-shadow:0 2px 12px rgba(0,0,0,.75);white-space:nowrap}
+  #moveToast.show{animation:toastPop 1.5s ease forwards}
+  @keyframes toastPop{0%{opacity:0;transform:translate(-50%,-50%) scale(.7)}12%{opacity:1;transform:translate(-50%,-50%) scale(1.06)}25%{transform:translate(-50%,-50%) scale(1)}78%{opacity:1}100%{opacity:0;transform:translate(-50%,-62%) scale(1)}}
+  /* local bridge */
+  .pill{display:inline-block;font-size:11px;font-weight:800;border-radius:10px;padding:2px 8px;background:#3d3a37;color:var(--muted);margin-left:6px}
+  .pill.on{background:var(--green);color:#fff}
+  .pill.off{background:var(--blunder);color:#fff}
+  code.cmd{display:block;background:#171614;border:1px solid var(--line);border-radius:6px;padding:8px;font-size:11.5px;color:#d8d4cf;margin-top:8px;white-space:pre-wrap;word-break:break-all}
+  .fenbox{font-size:11px;word-break:break-all}
   footer{color:var(--muted);font-size:12px;text-align:center;padding:0 16px 26px}
   footer a{color:#8fc36a}
 </style>
@@ -115,10 +139,18 @@
 <body>
 <header class="top">
   <div class="logo">♟️</div>
-  <h1>Chess Engine<small>chess.com-style board · Neo pieces · custom engine upload</small></h1>
+  <h1>Chess Engine<small>Stockfish 19-ready · Neo pieces · dots, arrows & live markers</small></h1>
 </header>
 
-<div class="app" id="app">
+<div id="gate"><div class="box">
+  <i class="fa-solid fa-chess-king" style="font-size:34px;color:var(--green)"></i>
+  <h1>Private Board</h1>
+  <input id="gate-pw" type="password" placeholder="••••••••" autocomplete="off">
+  <div class="err" id="gate-err"></div>
+  <button class="btn" id="gate-go">Enter</button>
+</div></div>
+
+<div class="app" id="app" style="visibility:hidden">
   <div class="board-col">
     <div class="evalbar" id="evalbar" title="Evaluation">
       <div class="white" id="evalwhite"></div>
@@ -174,6 +206,12 @@
         <button class="btn sec" id="undo"><i class="fa-solid fa-rotate-left"></i> Undo</button>
         <button class="btn" id="reset"><i class="fa-solid fa-flag"></i> New game</button>
       </div>
+      <div class="row">
+        <button class="btn sec" id="hintBtn"><i class="fa-solid fa-lightbulb"></i> Hint</button>
+        <button class="btn sec" id="resignBtn"><i class="fa-solid fa-flag"></i> Resign</button>
+      </div>
+      <div class="tgl"><span>Live move markers (!! ! ★ ?? ?!)</span><input type="checkbox" id="optLive" checked></div>
+      <div class="tgl"><span>Engine best-move arrow</span><input type="checkbox" id="optArrow" checked></div>
       <div class="tgl"><span>Show legal moves (dots)</span><input type="checkbox" id="optHints" checked></div>
       <div class="tgl"><span>Show coordinates</span><input type="checkbox" id="optCoords" checked></div>
       <div class="tgl"><span>Piece animations</span><input type="checkbox" id="optAnim" checked></div>
@@ -181,6 +219,16 @@
     </div>
 
     <div class="pane" id="pane-engine">
+      <div class="engine-box">
+        <div class="ename">Stockfish 19 <span class="pill off" id="bridgePill">local: off</span></div>
+        <div class="esub">Your <code>stockfish19.exe</code> is a native command-line UCI program (it reads text commands on stdin and prints replies on stdout) — browsers can't run <code>.exe</code> files directly. For full Stockfish 19 strength, run the included bridge on your PC, then connect. Everyone else automatically uses the built-in browser engine.</div>
+        <code class="cmd">python engine-bridge.py --engine "C:\Users\betza\Downloads\stockfish19.exe"</code>
+        <div class="row">
+          <button class="btn small" id="btnBridge">🔌 Connect to local Stockfish 19</button>
+          <button class="btn sec small" id="btnBridgeOff">Disconnect</button>
+        </div>
+        <div class="estat" id="bridgeStatus">Status: not connected</div>
+      </div>
       <div class="engine-box">
         <div class="ename" id="engineName">Built-in: Stockfish 10 (CDN)</div>
         <div class="esub">Upload your own engine. Works with <b>extracted</b> files (.js + .wasm) or an <b>unextracted .zip</b>. Native <code>.exe</code> files can't run in a browser — use a Stockfish <b>WASM/JS</b> build.</div>
@@ -207,6 +255,9 @@
         <button class="btn sec small" id="dlPgn">Download PGN</button>
       </div>
       <div class="status" id="pgnbox" style="white-space:pre-wrap"></div>
+      <label class="f">FEN</label>
+      <div class="status fenbox" id="fenbox">-</div>
+      <div class="row"><button class="btn sec small" id="copyFen">Copy FEN</button></div>
     </div>
 
     <div class="pane" id="pane-review">
@@ -224,7 +275,7 @@
     </div>
   </div>
 </div>
-<footer>Pieces: Chess.com <b>Neo</b> · Sounds: Chess.com · Built with chess.js + Stockfish · Project <b>ChessEngine0</b></footer>
+<footer>Pieces: Chess.com <b>Neo</b> · Sounds: Chess.com · Engine: <b>Stockfish 19</b> via local bridge (built-in browser fallback) · Project <b>ChessEngine0</b></footer>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js" crossorigin="anonymous"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js" crossorigin="anonymous"></script>
@@ -232,6 +283,12 @@
 /* ================= CONFIG ================= */
 var ENGINE_LOCAL = 'engine/stockfish.js';
 var ENGINE_CDN   = 'https://cdnjs.cloudflare.com/ajax/libs/stockfish.js/10.0.2/stockfish.js';
+/* Local Stockfish 19 bridge (engine-bridge.py drives your stockfish19.exe over UCI).
+   Browsers cannot execute .exe files, so the page talks to the bridge over HTTP. */
+var BRIDGE_URL = 'http://127.0.0.1:8765';
+var bridge={on:false,url:BRIDGE_URL,name:''};
+/* arrows + markers */
+var userArrows=[], userMarks=[], engineArrow=null, showArrow=true, liveMarkers=true;
 var PIECE_BASES = [
   'https://images.chesscomfiles.com/chess-themes/pieces/neo/300/',
   'https://images.chesscomfiles.com/chess-themes/pieces/neo/150/',
@@ -345,6 +402,85 @@ function paintOverlays(){
       else if(sq===selected){var h0=document.createElement('div');h0.className='hint';el.appendChild(h0);}
     }
   });
+  drawArrows();
+}
+/* ---- board extras: captured trays, arrow layer, marker toast (built once) ---- */
+function boardExtras(){
+  var wrap=$('#boardWrap');
+  var stack=document.createElement('div'); stack.className='board-stack';
+  wrap.parentNode.insertBefore(stack,wrap); stack.appendChild(wrap);
+  var top=document.createElement('div'); top.className='tray'; top.id='trayTop';
+  var bot=document.createElement('div'); bot.className='tray'; bot.id='trayBot';
+  stack.insertBefore(top,wrap); stack.appendChild(bot);
+  var NS='http://www.w3.org/2000/svg';
+  var svg=document.createElementNS(NS,'svg'); svg.id='arrows'; svg.setAttribute('viewBox','0 0 8 8');
+  function marker(id,fill){
+    var m=document.createElementNS(NS,'marker');
+    m.setAttribute('id',id); m.setAttribute('markerWidth','3.2'); m.setAttribute('markerHeight','3.2');
+    m.setAttribute('refX','2.2'); m.setAttribute('refY','1.6'); m.setAttribute('orient','auto');
+    var p=document.createElementNS(NS,'path'); p.setAttribute('d','M0,0 L3.2,1.6 L0,3.2 z'); p.setAttribute('fill',fill);
+    m.appendChild(p); return m;
+  }
+  var defs=document.createElementNS(NS,'defs');
+  defs.appendChild(marker('ah-g','rgba(21,121,47,.92)'));
+  defs.appendChild(marker('ah-r','rgba(211,47,47,.92)'));
+  defs.appendChild(marker('ah-y','rgba(230,179,0,.95)'));
+  defs.appendChild(marker('ah-b','rgba(25,118,210,.92)'));
+  svg.appendChild(defs); wrap.appendChild(svg);
+  var t=document.createElement('div'); t.id='moveToast'; wrap.appendChild(t);
+}
+var ARROW_C={g:'rgba(21,121,47,.85)',r:'rgba(211,47,47,.85)',y:'rgba(230,179,0,.9)',b:'rgba(25,118,210,.85)'};
+function sqCenter(sq){var p=sqXY(sq);return{x:p.x+0.5,y:p.y+0.5};}
+function drawArrows(){
+  var svg=$('#arrows'); if(!svg) return;
+  var NS='http://www.w3.org/2000/svg';
+  Array.prototype.slice.call(svg.querySelectorAll('.dyn')).forEach(function(n){n.remove();});
+  function arrow(a,colorKey,w){
+    var A=sqCenter(a.from),B=sqCenter(a.to);
+    var dx=B.x-A.x,dy=B.y-A.y,len=Math.hypot(dx,dy);
+    if(!len) return;
+    var l=document.createElementNS(NS,'line'); l.setAttribute('class','dyn');
+    l.setAttribute('x1',A.x+dx/len*0.30); l.setAttribute('y1',A.y+dy/len*0.30);
+    l.setAttribute('x2',B.x-dx/len*0.46); l.setAttribute('y2',B.y-dy/len*0.46);
+    l.setAttribute('stroke',ARROW_C[colorKey]||ARROW_C.g); l.setAttribute('stroke-width',w||0.13);
+    l.setAttribute('stroke-linecap','round'); l.setAttribute('opacity','0.9');
+    l.setAttribute('marker-end','url(#ah-'+(colorKey||'g')+')');
+    svg.appendChild(l);
+  }
+  if(engineArrow&&showArrow&&!game.game_over()) arrow(engineArrow,'g',0.13);
+  userArrows.forEach(function(a){arrow(a,a.c||'g',0.13);});
+  userMarks.forEach(function(m){
+    var C=sqCenter(m.sq);
+    var c=document.createElementNS(NS,'circle'); c.setAttribute('class','dyn');
+    c.setAttribute('cx',C.x); c.setAttribute('cy',C.y); c.setAttribute('r',0.42);
+    c.setAttribute('fill','none'); c.setAttribute('stroke',ARROW_C[m.c||'g']); c.setAttribute('stroke-width',0.1);
+    svg.appendChild(c);
+  });
+}
+/* ---- captured pieces + material ---- */
+var PIECE_VAL={p:1,n:3,b:3,r:5,q:9,k:0};
+function renderTrays(){
+  var top=$('#trayTop'),bot=$('#trayBot'); if(!top||!bot) return;
+  var count={w:{p:0,n:0,b:0,r:0,q:0},b:{p:0,n:0,b:0,r:0,q:0}};
+  game.board().forEach(function(row){row.forEach(function(p){if(p&&p.type!=='k'&&count[p.color][p.type]!==undefined)count[p.color][p.type]++;});});
+  var start={p:8,n:2,b:2,r:2,q:1};
+  var topColor=orientation==='white'?'b':'w', botColor=orientation==='white'?'w':'b';
+  function fill(el,capturer){
+    var victim=capturer==='w'?'b':'w', m=[];
+    Object.keys(start).forEach(function(t){for(var i=0;i<start[t]-count[victim][t];i++)m.push(t);});
+    m.sort(function(a,b){return PIECE_VAL[b]-PIECE_VAL[a];});
+    el.innerHTML='';
+    m.forEach(function(t){var im=document.createElement('img');im.src=pieceImg(victim,t);im.alt=t;el.appendChild(im);});
+    var score=0;
+    Object.keys(start).forEach(function(t){score+=(count[capturer][t]-count[victim][t])*PIECE_VAL[t];});
+    if(score>0){var s=document.createElement('span');s.className='mat';s.textContent='+'+score;el.appendChild(s);}
+  }
+  fill(top,topColor); fill(bot,botColor);
+}
+function toast(txt,color){
+  var t=$('#moveToast'); if(!t) return;
+  t.textContent=txt; t.style.color=color||'#fff';
+  t.classList.remove('show'); void t.offsetWidth; t.classList.add('show');
 }
 function placePieceEl(id,sq,type,color){
   var layer=$('#pieces'); var el=document.createElement('div'); el.className='pc'; el.dataset.id=id;
@@ -395,12 +531,14 @@ function select(sq){
 }
 function clearSel(){selected=null;legalForSelected=[];paintOverlays();}
 function tryMove(from,to,promotion){
+  var fenBefore=game.fen();
   var mv=game.move({from:from,to:to,promotion:promotion||'q'});
   if(!mv){playSound('illegal');return false;}
   lastMove={from:mv.from,to:mv.to}; viewPly=null;
   // animate: find piece id that was at from (before map is stale) — easiest: full reconcile with slide for mover
   animateMoveOnBoard(mv);
   clearSel(); afterMove(mv);
+  liveClassify(fenBefore,mv,game.history().length);
   return true;
 }
 function animateMoveOnBoard(mv){
@@ -467,9 +605,16 @@ function afterMove(mv){
 (function initInput(){
   var wrap=$('#boardWrap');
   var dragId=null,dragEl=null,startSq=null,hasMoved=false,downPos=null,hoverSq=null;
+  var arrowStart=null,dragWasSelected=false;
   function sqEl(sq){return document.querySelector('#squares .sq[data-sq="'+sq+'"]');}
+  wrap.addEventListener('contextmenu',function(e){e.preventDefault();});
   wrap.addEventListener('pointerdown',function(e){
+    if(e.pointerType==='mouse'&&e.button===2){
+      var sq2=xyToSq(e.clientX,e.clientY); if(sq2)arrowStart=sq2;
+      return;
+    }
     if(e.button!==undefined&&e.button!==0&&e.pointerType==='mouse')return;
+    if(userArrows.length||userMarks.length){userArrows=[];userMarks=[];drawArrows();}
     var sq=xyToSq(e.clientX,e.clientY); if(!sq)return;
     // promotion modal open? ignore
     if($('#promo').style.display==='block')return;
@@ -485,6 +630,7 @@ function afterMove(mv){
       return;
     }
     startSq=sq; hasMoved=false; downPos={x:e.clientX,y:e.clientY}; hoverSq=sq;
+    dragWasSelected=(selected===sq);
     select(sq);
     // prepare drag element
     var id=sqToId[sq]; if(id&&pieceEls[id]){
@@ -511,6 +657,22 @@ function afterMove(mv){
     }
   });
   function endDrag(e){
+    if(e.pointerType==='mouse'&&e.button===2&&arrowStart){
+      var up2=xyToSq(e.clientX,e.clientY);
+      var col=e.shiftKey?'r':(e.altKey?'b':'g');
+      if(up2){
+        if(up2===arrowStart){
+          var mi=-1;for(var k=0;k<userMarks.length;k++)if(userMarks[k].sq===up2)mi=k;
+          if(mi>-1)userMarks.splice(mi,1);else userMarks.push({sq:up2,c:col});
+        }else{
+          userArrows=userArrows.filter(function(a){return a.from!==arrowStart;});
+          userArrows.push({from:arrowStart,to:up2,c:col});
+          if(userArrows.length>12)userArrows.shift();
+        }
+        drawArrows();
+      }
+      arrowStart=null;return;
+    }
     if(!startSq)return;
     var from=startSq;
     if(dragEl){dragEl.classList.remove('dragging');dragEl.style.width='';dragEl.style.height='';moveEl(dragId,pieceEls[dragId].sq,true);}
@@ -524,9 +686,7 @@ function afterMove(mv){
       var ok=tryMove(from,upSq,'q');
       if(!ok){paintOverlays();}
     } else if(!wasDrag){
-      // click-click: keep selection (already selected on pointerdown). If clicked same square twice -> deselect
-      // selection already set; if user clicked selected square that was already selected before pointerdown, toggle off:
-      // (we re-selected, so track: if from===selected before? simplified: second click on same keeps it; third click clears via canMove path? keep simple: keep selected)
+      if(dragWasSelected&&upSq===from)clearSel();
     }
     paintOverlays();
   }
@@ -536,7 +696,7 @@ function afterMove(mv){
 
 /* ================= ENGINE PLUMBING + CUSTOM UPLOAD ================= */
 var engineWorker=null, engineListener=null, ENGINE_LOG=[];
-var currentEngineLabel='Built-in: Stockfish 10 (CDN)';
+var currentEngineLabel='Stockfish 19 (local bridge) / built-in browser engine';
 var customEngineActive=false;
 function logEng(t){var el=$('#engLog');el.textContent=(t+'\n'+el.textContent).slice(0,4000);}
 function makeWorker(url){
@@ -559,18 +719,19 @@ function initEngine(cb){
       try{ var w=workerFromCustom(saved); attachWorker(w); send('uci');send('isready');
         currentEngineLabel=saved.name||'Custom engine'; customEngineActive=true; updateEngineUI();
         logEng('loaded custom engine from storage: '+currentEngineLabel);
-        cb&&cb(); liveEval(); return; }catch(e){console.warn(e);}
+        cb&&cb(); liveEval(); pingBridge(false); return; }catch(e){console.warn(e);}
     }
     // 2) local file
     fetch(ENGINE_LOCAL,{method:'HEAD'}).then(function(r){return r.ok?ENGINE_LOCAL:ENGINE_CDN;}).catch(function(){return ENGINE_CDN;}).then(function(url){
       try{attachWorker(makeWorker(url));}catch(e){attachWorker(makeWorker(ENGINE_CDN));url=ENGINE_CDN;}
-      currentEngineLabel = url===ENGINE_CDN?'Built-in: Stockfish 10 (CDN)':'Local: engine/stockfish.js';
+      currentEngineLabel = url===ENGINE_CDN?'Built-in browser engine (Stockfish 10 WASM fallback)':'Local: engine/stockfish.js';
       customEngineActive=false; updateEngineUI();
       send('uci');send('isready'); cb&&cb();
+      pingBridge(false);
     });
   });
 }
-function updateEngineUI(){$('#engineName').textContent=currentEngineLabel;$('#engineStatus').textContent='Status: '+(engineWorker?'ready':'not loaded')+(customEngineActive?' (custom)':'');}
+function updateEngineUI(){$('#engineName').textContent=currentEngineLabel;$('#engineStatus').textContent='Status: '+(engineWorker?'ready':'not loaded')+(customEngineActive?' (custom)':'');updateBridgeUI();}
 function send(cmd){if(engineWorker)engineWorker.postMessage(cmd);}
 function onEngineLine(line){
   if(!line)return; ENGINE_LOG.push(line);if(ENGINE_LOG.length>200)ENGINE_LOG.shift();
@@ -579,7 +740,49 @@ function onEngineLine(line){
 }
 function parseScore(line){var m=line.match(/score (cp|mate) (-?\d+)/);if(!m)return null;return m[1]==='mate'?{mate:parseInt(m[2],10),cp:(parseInt(m[2],10)>0?10000:-10000)}:{cp:parseInt(m[2],10)};}
 var engineQueue=Promise.resolve();
+/* ---- local Stockfish 19 bridge client ---- */
+function bridgeGet(path,timeoutMs){
+  return new Promise(function(res,rej){
+    var to=setTimeout(function(){rej(new Error('timeout'));},timeoutMs||1200);
+    fetch(bridge.url+path).then(function(r){clearTimeout(to);if(!r.ok)throw new Error('http '+r.status);return r.json();}).then(res,function(e){clearTimeout(to);rej(e);});
+  });
+}
+function updateBridgeUI(){
+  var p=$('#bridgePill');
+  if(p){p.textContent=bridge.on?'local: on':'local: off';p.className='pill '+(bridge.on?'on':'off');}
+  var s=$('#bridgeStatus');
+  if(s)s.textContent='Status: '+(bridge.on?('connected — '+currentEngineLabel):'not connected (using built-in browser engine)');
+}
+function pingBridge(manual){
+  if(manual)$('#bridgeStatus').textContent='Status: connecting to '+bridge.url+'…';
+  return bridgeGet('/status',1200).then(function(j){
+    bridge.on=true;bridge.name=(j&&j.engine)||'Stockfish 19';
+    currentEngineLabel=bridge.name+' (local EXE via bridge)';customEngineActive=true;
+    updateEngineUI();updateBridgeUI();
+    logEng('bridge connected: '+currentEngineLabel);
+    setStatus('Connected to <b>'+currentEngineLabel+'</b>.');
+    return true;
+  }).catch(function(){
+    if(manual)$('#bridgeStatus').textContent='Status: bridge not found. Run: python engine-bridge.py --engine "…stockfish19.exe"';
+    return false;
+  });
+}
+function bridgeAnalyse(fen,movetime,depth,onInfo){
+  var q='/analyse?fen='+encodeURIComponent(fen)+'&depth='+(depth||12)+'&movetime='+(movetime||0);
+  return bridgeGet(q,(movetime||8000)+15000).then(function(j){
+    var s={cp:(j.cp||0)};if(j.mate!==undefined&&j.mate!==null)s.mate=j.mate;
+    if(onInfo)onInfo(s);
+    return{cp:s.cp,mate:s.mate,best:j.best};
+  });
+}
 function analyse(fen,movetime,depth,onInfo){
+  if(bridge.on){
+    var runB=function(){return bridgeAnalyse(fen,movetime,depth,onInfo).catch(function(){bridge.on=false;updateBridgeUI();return analyseWorker(fen,movetime,depth,onInfo);});};
+    engineQueue=engineQueue.then(runB,runB);return engineQueue;
+  }
+  return analyseWorker(fen,movetime,depth,onInfo);
+}
+function analyseWorker(fen,movetime,depth,onInfo){
   var run=function(){return new Promise(function(resolve){
     var last=null,done=false;
     var finish=function(best){if(done)return;done=true;engineListener=null;resolve({cp:last?last.cp:0,mate:last&&last.mate,best:best});};
@@ -685,16 +888,46 @@ function setEvalBar(cp){
 function liveEval(){
   if(reviewing)return;
   var fen=game.fen(),turn=game.turn();
-  analyse(fen,600,0,function(s){if(reviewing)return;setEvalBar(turn==='w'?s.cp:-s.cp);});
+  analyse(fen,600,0,function(s){if(reviewing)return;setEvalBar(turn==='w'?s.cp:-s.cp);}).then(function(r){
+    if(reviewing)return;
+    if(r&&r.best&&r.best.length>=4&&r.best!=='(none)'&&!game.game_over())engineArrow={from:r.best.slice(0,2),to:r.best.slice(2,4)};
+    else engineArrow=null;
+    drawArrows();
+  });
+}
+/* ---- live move classification: !! ! ★ B ✓ ?! ? ?? with chess.com colors ---- */
+function liveClassify(fenBefore,mv,ply){
+  if(!liveMarkers||reviewing||!mv)return;
+  analyse(fenBefore,350,0).then(function(b){
+    return analyse(game.fen(),350,0).then(function(a){
+      if(reviewing)return;
+      var after=-a.cp;
+      var loss=Math.max(0,Math.round(b.cp-after)-NOISE);
+      var isBest=b.best&&(b.best.slice(0,4)===(mv.from+mv.to));
+      var sacrifice=!mv.captured&&/[NBRQ]/.test(mv.piece.toUpperCase())&&loss<=10&&after>b.cp+80;
+      var cls=classify(loss,ply-1,isBest,sacrifice,after-b.cp);
+      results[ply-1]={cls:cls,loss:loss};
+      renderMoves();renderLegend();
+      var c=CLASS[cls];
+      if(cls==='brilliant')toast('Brilliant !!',c.c);
+      else if(cls==='great')toast('Great !',c.c);
+      else if(cls==='blunder')toast('Blunder ??',c.c);
+      else if(cls==='mistake')toast('Mistake ?',c.c);
+      else if(cls==='best')toast('Best ★',c.c);
+      if(cls==='brilliant'||cls==='great'||cls==='best')playSound('correct');
+      else if(cls==='blunder'||cls==='mistake')playSound('incorrect');
+    });
+  });
 }
 function engineMove(){
   if(game.game_over())return;
   thinking=true;setStatus('<i class="fa-solid fa-spinner fa-spin"></i> Engine thinking…');
+  var fenBefore=game.fen();
   analyse(game.fen(),0,parseInt($('#depth').value,10)).then(function(r){
     thinking=false;
     if(r.best&&r.best!=='(none)'){
       var mv=game.move({from:r.best.slice(0,2),to:r.best.slice(2,4),promotion:r.best[4]||'q'});
-      if(mv){lastMove={from:mv.from,to:mv.to};animateMoveOnBoard(mv);afterMove(mv);return;}
+      if(mv){lastMove={from:mv.from,to:mv.to};animateMoveOnBoard(mv);afterMove(mv);liveClassify(fenBefore,mv,game.history().length);return;}
     }
     updateStatus();liveEval();
   });
@@ -723,6 +956,8 @@ function renderMoves(){
     rows+='<tr><td class="num">'+(i/2+1)+'.</td><td><span class="mv" data-i="'+i+'">'+h[i].san+badge(i)+'</span></td><td>'+(h[i+1]?'<span class="mv" data-i="'+(i+1)+'">'+h[i+1].san+badge(i+1)+'</span>':'')+'</td></tr>';
   }
   $('#movelist').innerHTML=rows;$('#pgnbox').textContent=game.pgn()||'(empty)';
+  $('#fenbox').textContent=game.fen();
+  renderTrays();
   $all('#movelist .mv').forEach(function(el){
     el.onclick=function(){gotoPly(parseInt(el.dataset.i,10)+1);};
   });
@@ -782,6 +1017,7 @@ function renderLegend(){
 }
 function newGame(){
   game.reset();results=[];lastMove=null;viewPly=null;selected=null;legalForSelected=[];
+  userArrows=[];userMarks=[];engineArrow=null;
   $('#gameOver').classList.remove('show');
   fullSyncPieces();renderMoves();updateStatus();setEvalBar(0);paintOverlays();
   $('#accw').textContent='—';$('#accb').textContent='—';$('#acpl').textContent='';$('#revbar').style.width='0';
@@ -794,6 +1030,7 @@ function newGame(){
 
 /* ================= BOOT ================= */
 function boot(){
+  boardExtras();
   buildSquares();fullSyncPieces();renderMoves();renderLegend();updateEngineUI();
   $all('.tabs button').forEach(function(b){b.onclick=function(){$all('.tabs button').forEach(function(x){x.classList.remove('active');});b.classList.add('active');$all('.pane').forEach(function(p){p.classList.remove('active');});$('#pane-'+b.dataset.tab).classList.add('active');};});
   $('#theme').onchange=function(){applyTheme(this.value);};
@@ -808,6 +1045,26 @@ function boot(){
   $('#optHints').onchange=function(){showHints=this.checked;paintOverlays();};
   $('#optCoords').onchange=function(){showCoords=this.checked;paintOverlays();};
   $('#optAnim').onchange=function(){animOn=this.checked;};
+  $('#optLive').onchange=function(){liveMarkers=this.checked;};
+  $('#optArrow').onchange=function(){showArrow=this.checked;if(!showArrow)engineArrow=null;drawArrows();};
+  $('#hintBtn').onclick=function(){
+    if(reviewing||thinking||game.game_over())return;
+    setStatus('🔍 Finding best move…');
+    analyse(game.fen(),0,Math.min(22,parseInt($('#depth').value,10)+4)).then(function(r){
+      if(r&&r.best&&r.best!=='(none)'){
+        engineArrow={from:r.best.slice(0,2),to:r.best.slice(2,4)};drawArrows();
+        playSound('notify');setStatus('Hint: <b>'+r.best+'</b>');
+        setTimeout(updateStatus,4000);
+      }else updateStatus();
+    });
+  };
+  $('#resignBtn').onclick=function(){
+    if(game.game_over())return;
+    var winner=$('#mode').value==='engine'?(playerColor==='w'?'Black':'White'):(game.turn()==='w'?'Black':'White');
+    $('#goTitle').textContent='Resigned';$('#goSub').textContent=winner+' wins — resignation';
+    $('#gameOver').classList.add('show');playSound('game-end');
+  };
+  $('#copyFen').onclick=function(){navigator.clipboard&&navigator.clipboard.writeText(game.fen());setStatus('FEN copied.');};
   $('#copyPgn').onclick=function(){navigator.clipboard&&navigator.clipboard.writeText(game.pgn());setStatus('PGN copied.');};
   $('#dlPgn').onclick=function(){var b=new Blob([game.pgn()],{type:'text/plain'});var a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='game.pgn';a.click();};
   $('#run-review').onclick=runReview;
@@ -819,11 +1076,24 @@ function boot(){
   $('#engFolder').onchange=function(){useCustomFiles(this.files,(this.files[0]&&this.files[0].webkitRelativePath||'folder').split('/')[0]);this.value='';};
   $('#engZip').onchange=function(){if(this.files[0])handleZipFile(this.files[0]);this.value='';};
   $('#btnEngDefault').onclick=function(){idbClear().then(function(){location.reload();});};
-  $('#btnEngClear').onclick=function(){idbClear().then(function(){currentEngineLabel='Built-in: Stockfish 10 (CDN)';customEngineActive=false;location.reload();});};
+  $('#btnBridge').onclick=function(){pingBridge(true);};
+  $('#btnBridgeOff').onclick=function(){bridge.on=false;updateBridgeUI();setStatus('Bridge disconnected. Using built-in engine.');};
+  $('#btnEngClear').onclick=function(){idbClear().then(function(){currentEngineLabel='Built-in browser engine';customEngineActive=false;location.reload();});};
   window.addEventListener('resize',function(){fullSyncPieces();paintOverlays();});
   initEngine(function(){updateStatus();liveEval();playSound('game-start');});
 }
-document.readyState==='loading'?document.addEventListener('DOMContentLoaded',boot):boot();
+/* ---------- password gate (55221144) ---------- */
+(function(){
+  var PW='55221144';
+  function open(){var g=document.getElementById('gate');if(g)g.remove();document.getElementById('app').style.visibility='visible';boot();}
+  if(sessionStorage.getItem('gate-ok')==='1'){open();return;}
+  document.getElementById('gate-go').onclick=function(){
+    var v=document.getElementById('gate-pw').value;
+    if(v===PW){sessionStorage.setItem('gate-ok','1');open();}
+    else document.getElementById('gate-err').textContent='Incorrect password';
+  };
+  document.getElementById('gate-pw').addEventListener('keydown',function(e){if(e.key==='Enter')document.getElementById('gate-go').click();});
+})();
 </script>
 </body>
 </html>
