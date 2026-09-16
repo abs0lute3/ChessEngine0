@@ -123,9 +123,9 @@
   /* arrows */
   #arrows{position:absolute;inset:0;z-index:7;pointer-events:none}
   /* live move-marker toast */
-  #moveToast{position:absolute;left:50%;top:42%;transform:translate(-50%,-50%) scale(.8);z-index:65;font-weight:900;font-size:clamp(22px,5vw,40px);pointer-events:none;opacity:0;text-shadow:0 2px 12px rgba(0,0,0,.75);white-space:nowrap}
-  #moveToast.show{animation:toastPop 1.5s ease forwards}
-  @keyframes toastPop{0%{opacity:0;transform:translate(-50%,-50%) scale(.7)}12%{opacity:1;transform:translate(-50%,-50%) scale(1.06)}25%{transform:translate(-50%,-50%) scale(1)}78%{opacity:1}100%{opacity:0;transform:translate(-50%,-62%) scale(1)}}
+  #moveToast{position:absolute;left:50%;top:10px;transform:translateX(-50%) scale(.9);z-index:65;font-weight:800;font-size:clamp(13px,2.6vw,18px);pointer-events:none;opacity:0;background:rgba(20,18,16,.9);border-radius:20px;padding:6px 16px;white-space:nowrap;box-shadow:0 4px 14px rgba(0,0,0,.5)}
+  #moveToast.show{animation:toastTop 1.3s ease forwards}
+  @keyframes toastTop{0%{opacity:0;transform:translateX(-50%) translateY(-8px) scale(.9)}15%{opacity:1;transform:translateX(-50%) translateY(0) scale(1)}80%{opacity:1}100%{opacity:0;transform:translateX(-50%) translateY(-6px)}}
   /* local bridge */
   .pill{display:inline-block;font-size:11px;font-weight:800;border-radius:10px;padding:2px 8px;background:#3d3a37;color:var(--muted);margin-left:6px}
   .pill.on{background:var(--green);color:#fff}
@@ -895,15 +895,20 @@ function liveEval(){
     drawArrows();
   });
 }
-/* ---- live move classification: !! ! ★ B ✓ ?! ? ?? with chess.com colors ---- */
+/* ---- live move classification: markers live in the MOVE LIST, not on pieces ----
+   Mate delivery is always Best (never auto-blunder); game-ending draws get no
+   auto-marker; a higher noise floor + longer searches stop false mistakes. */
+var NOISE_LIVE=30;
 function liveClassify(fenBefore,mv,ply){
   if(!liveMarkers||reviewing||!mv)return;
-  analyse(fenBefore,350,0).then(function(b){
-    return analyse(game.fen(),350,0).then(function(a){
-      if(reviewing)return;
+  if(game.in_checkmate()){results[ply-1]={cls:'best',loss:0};renderMoves();renderLegend();return;}
+  if(game.game_over())return;
+  analyse(fenBefore,550,0).then(function(b){
+    return analyse(game.fen(),550,0).then(function(a){
+      if(reviewing||!b||!a)return;
       var after=-a.cp;
-      var loss=Math.max(0,Math.round(b.cp-after)-NOISE);
-      var isBest=b.best&&(b.best.slice(0,4)===(mv.from+mv.to));
+      var loss=Math.max(0,Math.round(b.cp-after)-NOISE_LIVE);
+      var isBest=!!b.best&&b.best!=='(none)'&&(b.best.slice(0,4)===(mv.from+mv.to));
       var sacrifice=!mv.captured&&/[NBRQ]/.test(mv.piece.toUpperCase())&&loss<=10&&after>b.cp+80;
       var cls=classify(loss,ply-1,isBest,sacrifice,after-b.cp);
       results[ply-1]={cls:cls,loss:loss};
@@ -912,8 +917,6 @@ function liveClassify(fenBefore,mv,ply){
       if(cls==='brilliant')toast('Brilliant !!',c.c);
       else if(cls==='great')toast('Great !',c.c);
       else if(cls==='blunder')toast('Blunder ??',c.c);
-      else if(cls==='mistake')toast('Mistake ?',c.c);
-      else if(cls==='best')toast('Best ★',c.c);
       if(cls==='brilliant'||cls==='great'||cls==='best')playSound('correct');
       else if(cls==='blunder'||cls==='mistake')playSound('incorrect');
     });
@@ -998,6 +1001,7 @@ function runReview(){
         var cls=classify(loss,k,isBest,sacrifice,after-before);
         results[k]={cls:cls,loss:loss};(hist[k].color==='w'?lossW:lossB).push(loss);
       }
+      if(game.in_checkmate()&&results.length)results[results.length-1]={cls:'best',loss:0};
       var avg=function(a){return a.length?a.reduce(function(x,y){return x+y;},0)/a.length:0;};
       var aw=avg(lossW),ab=avg(lossB);
       $('#accw').textContent=accuracyFrom(aw).toFixed(1);$('#accb').textContent=accuracyFrom(ab).toFixed(1);
