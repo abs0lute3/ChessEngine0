@@ -43,7 +43,7 @@ Then press **Connect to local Stockfish 19** in the Engine tab
 - Click or drag, legal-move dots + capture rings (chess.com style)
 - Right-click drag: arrows (Shift=red, Alt=blue), right-click: circle marks
 - Engine best-move arrow + Hint button
-- Game clocks (Bullet → Classical) + player cards, captured trays + material
+- Player cards, captured-piece trays with material score
 - Live move markers during play (!! ! ★ 📖 ✓ ?! ? ??) with chess.com colors
 - Full game review with accuracy + move classifications
 - Neo pieces, smooth slide animations, last-move / check / selected highlights
