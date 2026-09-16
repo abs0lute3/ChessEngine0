@@ -132,6 +132,16 @@
   .pill.off{background:var(--blunder);color:#fff}
   code.cmd{display:block;background:#171614;border:1px solid var(--line);border-radius:6px;padding:8px;font-size:11.5px;color:#d8d4cf;margin-top:8px;white-space:pre-wrap;word-break:break-all}
   .fenbox{font-size:11px;word-break:break-all}
+  /* player cards + clocks (chess.com style) */
+  .pcard{display:flex;align-items:center;gap:10px;background:var(--panel);border-radius:8px;padding:8px 12px;max-width:min(78vw,560px);box-shadow:0 6px 18px rgba(0,0,0,.35)}
+  .pcard .avatar{width:34px;height:34px;border-radius:6px;background:#3d3a37;display:flex;align-items:center;justify-content:center;font-size:20px;flex:none}
+  .pcard .pinfo{flex:1;min-width:0}
+  .pcard .pname{font-size:13.5px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .pcard .psub{font-size:11.5px;color:var(--muted)}
+  .clock{font-variant-numeric:tabular-nums;font-size:22px;font-weight:800;background:#21201d;border-radius:6px;padding:4px 12px;flex:none}
+  .clock.active{background:#e9e6e2;color:#21201d}
+  .clock.low{background:#fa412d;color:#fff}
+  .clock.off{opacity:.45}
   footer{color:var(--muted);font-size:12px;text-align:center;padding:0 16px 26px}
   footer a{color:#8fc36a}
 </style>
@@ -139,7 +149,7 @@
 <body>
 <header class="top">
   <div class="logo">♟️</div>
-  <h1>Chess Engine<small>Stockfish 19-ready · Neo pieces · dots, arrows & live markers</small></h1>
+  <h1>Chess Engine<small>Stockfish 17.1 built-in · clocks, arrows, dots & live markers</small></h1>
 </header>
 
 <div id="gate"><div class="box">
@@ -186,8 +196,19 @@
         <option value="blue">Tournament Blue</option>
         <option value="midnight">Midnight</option>
       </select>
-      <label class="f">Engine depth <span id="depthval">12</span></label>
-      <input id="depth" type="range" min="1" max="22" value="12">
+      <label class="f">Time control</label>
+      <select id="tc">
+        <option value="0+0">Unlimited</option>
+        <option value="60+0">Bullet 1+0</option>
+        <option value="180+2" selected>Blitz 3+2</option>
+        <option value="300+0">Blitz 5+0</option>
+        <option value="300+3">Blitz 5+3</option>
+        <option value="600+0">Rapid 10+0</option>
+        <option value="900+10">Rapid 15+10</option>
+        <option value="1800+0">Classical 30+0</option>
+      </select>
+      <label class="f">Engine depth <span id="depthval">10</span></label>
+      <input id="depth" type="range" min="1" max="22" value="10">
       <label class="f">Mode</label>
       <select id="mode">
         <option value="engine">Play vs Engine</option>
@@ -230,8 +251,8 @@
         <div class="estat" id="bridgeStatus">Status: not connected</div>
       </div>
       <div class="engine-box">
-        <div class="ename" id="engineName">Built-in: Stockfish 10 (CDN)</div>
-        <div class="esub">Upload your own engine. Works with <b>extracted</b> files (.js + .wasm) or an <b>unextracted .zip</b>. Native <code>.exe</code> files can't run in a browser — use a Stockfish <b>WASM/JS</b> build.</div>
+        <div class="ename" id="engineName">Stockfish 17.1 (official, built-in)</div>
+        <div class="esub">Built-in engine is official <b>Stockfish 17.1</b> (WASM + NNUE, runs fully in your browser). For max strength, connect your local <b>Stockfish 19</b> bridge above. You can also upload another WASM/JS engine below (extracted or .zip).</div>
         <div class="estat" id="engineStatus">Status: starting…</div>
         <button class="btn small" id="btnEngFile">📄 Upload engine file(s) (.js, .wasm, .nnue)</button>
         <input type="file" id="engFile" accept=".js,.wasm,.nnue,.bin" multiple style="display:none">
@@ -275,14 +296,16 @@
     </div>
   </div>
 </div>
-<footer>Pieces: Chess.com <b>Neo</b> · Sounds: Chess.com · Engine: <b>Stockfish 19</b> via local bridge (built-in browser fallback) · Project <b>ChessEngine0</b></footer>
+<footer>Pieces: Chess.com <b>Neo</b> · Sounds: Chess.com · Engine: <b>Stockfish 17.1</b> built-in (Stockfish 19 via local bridge) · Project <b>ChessEngine0</b></footer>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js" crossorigin="anonymous"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js" crossorigin="anonymous"></script>
 <script>
 /* ================= CONFIG ================= */
-var ENGINE_LOCAL = 'engine/stockfish.js';
-var ENGINE_CDN   = 'https://cdnjs.cloudflare.com/ajax/libs/stockfish.js/10.0.2/stockfish.js';
+/* Built-in engine: official Stockfish 17.1 (WASM + NNUE), served from engine/.
+   Requires http(s) + cross-origin isolation (COOP/COEP — set in vercel.json).
+   No more Stockfish 10: the local Stockfish 19 bridge is the stronger option. */
+var ENGINE_WORKER = 'engine/sf-engine-worker.js';
 /* Local Stockfish 19 bridge (engine-bridge.py drives your stockfish19.exe over UCI).
    Browsers cannot execute .exe files, so the page talks to the bridge over HTTP. */
 var BRIDGE_URL = 'http://127.0.0.1:8765';
@@ -409,9 +432,16 @@ function boardExtras(){
   var wrap=$('#boardWrap');
   var stack=document.createElement('div'); stack.className='board-stack';
   wrap.parentNode.insertBefore(stack,wrap); stack.appendChild(wrap);
+  function card(id){
+    var c=document.createElement('div'); c.className='pcard'; c.id=id;
+    c.innerHTML='<div class="avatar">♟</div><div class="pinfo"><div class="pname">…</div><div class="psub"></div></div><div class="clock off">--:--</div>';
+    return c;
+  }
   var top=document.createElement('div'); top.className='tray'; top.id='trayTop';
   var bot=document.createElement('div'); bot.className='tray'; bot.id='trayBot';
-  stack.insertBefore(top,wrap); stack.appendChild(bot);
+  var cardTop=card('cardTop'), cardBot=card('cardBot');
+  stack.insertBefore(cardTop,wrap); stack.insertBefore(top,wrap);
+  stack.appendChild(bot); stack.appendChild(cardBot);
   var NS='http://www.w3.org/2000/svg';
   var svg=document.createElementNS(NS,'svg'); svg.id='arrows'; svg.setAttribute('viewBox','0 0 8 8');
   function marker(id,fill){
@@ -482,6 +512,58 @@ function toast(txt,color){
   t.textContent=txt; t.style.color=color||'#fff';
   t.classList.remove('show'); void t.offsetWidth; t.classList.add('show');
 }
+/* ---- clocks + player cards (chess.com style) ---- */
+var TC={base:180000,inc:2000};
+var wMs=0,bMs=0,lastTick=0,timeLoss=null,lowWarned={w:false,b:false};
+function parseTC(){var v=($('#tc').value||'0+0').split('+');TC={base:parseInt(v[0],10)*1000,inc:parseInt(v[1],10)*1000};}
+function fmtClock(ms){
+  if(ms==null||ms<0)ms=0;
+  var s=Math.ceil(ms/1000),m=Math.floor(s/60);s=s%60;
+  return m+':'+String(s).padStart(2,'0');
+}
+function clocksOn(){return TC.base>0&&$('#mode').value==='engine'&&!game.game_over()&&!timeLoss&&game.history().length>0;}
+function resetClocks(){parseTC();wMs=TC.base;bMs=TC.base;lowWarned={w:false,b:false};timeLoss=null;lastTick=Date.now();renderCards();}
+function tickClocks(){
+  if(!clocksOn()){lastTick=Date.now();return;}
+  var now=Date.now(),dt=now-lastTick;lastTick=now;
+  if(game.turn()!==playerColor)return; // bots don't flag — only the human's clock runs
+  if(game.turn()==='w')wMs-=dt;else bMs-=dt;
+  var loser=wMs<=0?'w':(bMs<=0?'b':null);
+  if(loser){if(loser==='w')wMs=0;else bMs=0;onFlag(loser);return;}
+  if(wMs<10000&&!lowWarned.w){lowWarned.w=true;playSound('lowtime');}
+  if(bMs<10000&&!lowWarned.b){lowWarned.b=true;playSound('lowtime');}
+  renderCards();
+}
+function onFlag(loser){
+  timeLoss=loser;
+  var winner=loser==='w'?'Black':'White';
+  $('#goTitle').textContent='Time';$('#goSub').textContent=winner+' wins on time';
+  $('#gameOver').classList.add('show');playSound('game-end');
+  renderCards();updateStatus();
+}
+function engShortName(){return (bridge.on?bridge.name:currentEngineLabel).replace(' (local EXE via bridge)','').replace(' (official, built-in)','');}
+function renderCards(){
+  var topC=$('#cardTop'),botC=$('#cardBot');if(!topC||!botC)return;
+  var topColor=orientation==='white'?'b':'w',botColor=orientation==='white'?'w':'b';
+  function nameFor(color){
+    if($('#mode').value==='engine'){
+      if(color===playerColor)return 'You';
+      return engShortName()+' · d'+$('#depth').value;
+    }
+    return color==='w'?'White':'Black';
+  }
+  function fill(card,color){
+    card.querySelector('.pname').textContent=(color==='w'?'♙ ':'♟ ')+nameFor(color);
+    card.querySelector('.psub').textContent=(color===game.turn()&&!game.game_over()&&!timeLoss)?'to move':'';
+    card.querySelector('.avatar').textContent=$('#mode').value==='engine'?(color===playerColor?'🧑':'🤖'):'♞';
+    var cl=card.querySelector('.clock');
+    cl.textContent=TC.base>0?fmtClock(color==='w'?wMs:bMs):'∞';
+    cl.classList.toggle('off',!(TC.base>0));
+    cl.classList.toggle('active',!!(TC.base>0&&color===game.turn()&&clocksOn()));
+    cl.classList.toggle('low',!!(TC.base>0&&(color==='w'?wMs:bMs)<10000));
+  }
+  fill(topC,topColor);fill(botC,botColor);
+}
 function placePieceEl(id,sq,type,color){
   var layer=$('#pieces'); var el=document.createElement('div'); el.className='pc'; el.dataset.id=id;
   var img=document.createElement('img'); img.alt=color+type; img.draggable=false;
@@ -517,7 +599,7 @@ function fenAtPly(n){var g=new Chess();var h=game.history();for(var i=0;i<n&&i<h
 
 /* ================= SELECTION + MOVES ================= */
 function canMovePieceAt(sq){
-  if(game.game_over()||thinking||reviewing||viewPly!=null) return false;
+  if(game.game_over()||thinking||reviewing||viewPly!=null||timeLoss) return false;
   var p=game.get(sq); if(!p) return false;
   if(p.color!==game.turn()) return false;
   if($('#mode').value==='engine' && p.color!==playerColor) return false;
@@ -594,6 +676,8 @@ function openPromo(color,anchorSq,cb){
   box.style.top = topFlip? (xy.y*sqSize)+'px' : Math.max(0,(xy.y-3)*sqSize)+'px';
 }
 function afterMove(mv){
+  if(TC.base>0&&mv){if(mv.color==='w')wMs+=TC.inc;else bMs+=TC.inc;}
+  lastTick=Date.now();renderCards();
   renderMoves(); updateStatus(); paintOverlays();
   if(mv) soundForMove(mv);
   checkGameOverModal();
@@ -696,16 +780,9 @@ function afterMove(mv){
 
 /* ================= ENGINE PLUMBING + CUSTOM UPLOAD ================= */
 var engineWorker=null, engineListener=null, ENGINE_LOG=[];
-var currentEngineLabel='Stockfish 19 (local bridge) / built-in browser engine';
+var currentEngineLabel='Stockfish 17.1 (official, built-in)';
 var customEngineActive=false;
 function logEng(t){var el=$('#engLog');el.textContent=(t+'\n'+el.textContent).slice(0,4000);}
-function makeWorker(url){
-  if(/^https?:/i.test(url)){
-    var blob=new Blob(["self.importScripts('"+url+"');"],{type:'application/javascript'});
-    return new Worker(URL.createObjectURL(blob));
-  }
-  return new Worker(url);
-}
 function attachWorker(w){
   engineWorker=w;
   engineWorker.onmessage=function(e){onEngineLine(typeof e.data==='string'?e.data:(e.data&&e.data.data)||'');};
@@ -721,14 +798,28 @@ function initEngine(cb){
         logEng('loaded custom engine from storage: '+currentEngineLabel);
         cb&&cb(); liveEval(); pingBridge(false); return; }catch(e){console.warn(e);}
     }
-    // 2) local file
-    fetch(ENGINE_LOCAL,{method:'HEAD'}).then(function(r){return r.ok?ENGINE_LOCAL:ENGINE_CDN;}).catch(function(){return ENGINE_CDN;}).then(function(url){
-      try{attachWorker(makeWorker(url));}catch(e){attachWorker(makeWorker(ENGINE_CDN));url=ENGINE_CDN;}
-      currentEngineLabel = url===ENGINE_CDN?'Built-in browser engine (Stockfish 10 WASM fallback)':'Local: engine/stockfish.js';
-      customEngineActive=false; updateEngineUI();
-      send('uci');send('isready'); cb&&cb();
-      pingBridge(false);
-    });
+    loadBuiltIn(cb);
+  });
+}
+/* Built-in: official Stockfish 17.1 WASM worker (module worker, same-origin). */
+function loadBuiltIn(cb){
+  if(location.protocol==='file:'){
+    currentEngineLabel='Stockfish 17.1 needs http(s) — serve the folder or use the bridge';
+    updateEngineUI();
+    setStatus('Built-in engine needs http(s). Run <b>bunx serve .</b> here, or connect the Stockfish 19 bridge (Engine tab).');
+    pingBridge(true); cb&&cb(); return;
+  }
+  fetch(ENGINE_WORKER,{method:'HEAD'}).then(function(r){
+    if(!r.ok) throw new Error('missing '+ENGINE_WORKER);
+    attachWorker(new Worker(ENGINE_WORKER,{type:'module'}));
+    currentEngineLabel='Stockfish 17.1 (official, built-in)'; customEngineActive=false; updateEngineUI();
+    send('uci');send('isready'); cb&&cb();
+    pingBridge(false);
+  }).catch(function(){
+    currentEngineLabel='Built-in engine files missing — use the Stockfish 19 bridge or upload an engine';
+    updateEngineUI();
+    setStatus('Engine files missing. Start the Stockfish 19 bridge (Engine tab) or upload a WASM engine.');
+    pingBridge(true); cb&&cb();
   });
 }
 function updateEngineUI(){$('#engineName').textContent=currentEngineLabel;$('#engineStatus').textContent='Status: '+(engineWorker?'ready':'not loaded')+(customEngineActive?' (custom)':'');updateBridgeUI();}
@@ -788,7 +879,7 @@ function analyseWorker(fen,movetime,depth,onInfo){
     var finish=function(best){if(done)return;done=true;engineListener=null;resolve({cp:last?last.cp:0,mate:last&&last.mate,best:best});};
     engineListener=function(line){var s=parseScore(line);if(s){last=s;if(onInfo)onInfo(s);}if(line.indexOf('bestmove')===0)finish(line.split(/\s+/)[1]);};
     send('position fen '+fen);send(movetime?('go movetime '+movetime):('go depth '+depth));
-    setTimeout(function(){if(!done){send('stop');setTimeout(function(){finish(null);},1500);}},(movetime||15000)+2000);
+    setTimeout(function(){if(!done){send('stop');setTimeout(function(){finish(null);},2000);}},(movetime||30000)+4000);
   });};
   engineQueue=engineQueue.then(run,run);return engineQueue;
 }
@@ -923,19 +1014,26 @@ function liveClassify(fenBefore,mv,ply){
   });
 }
 function engineMove(){
-  if(game.game_over())return;
+  if(game.game_over()||timeLoss)return;
   thinking=true;setStatus('<i class="fa-solid fa-spinner fa-spin"></i> Engine thinking…');
   var fenBefore=game.fen();
   analyse(game.fen(),0,parseInt($('#depth').value,10)).then(function(r){
-    thinking=false;
-    if(r.best&&r.best!=='(none)'){
-      var mv=game.move({from:r.best.slice(0,2),to:r.best.slice(2,4),promotion:r.best[4]||'q'});
-      if(mv){lastMove={from:mv.from,to:mv.to};animateMoveOnBoard(mv);afterMove(mv);liveClassify(fenBefore,mv,game.history().length);return;}
-    }
-    updateStatus();liveEval();
+    if(r.best&&r.best!=='(none)'){reply(r.best);return;}
+    // depth search timed out — fall back to a quick time-capped search so the engine always replies
+    analyse(game.fen(),1500,0).then(function(r2){
+      if(r2.best&&r2.best!=='(none)')reply(r2.best);
+      else{thinking=false;updateStatus();liveEval();}
+    });
   });
+  function reply(best){
+    thinking=false;
+    var mv=game.move({from:best.slice(0,2),to:best.slice(2,4),promotion:best[4]||'q'});
+    if(mv){lastMove={from:mv.from,to:mv.to};animateMoveOnBoard(mv);afterMove(mv);liveClassify(fenBefore,mv,game.history().length);return;}
+    updateStatus();liveEval();
+  }
 }
 function updateStatus(){
+  if(timeLoss){setStatus('<b>Time</b> — '+(timeLoss==='w'?'Black':'White')+' wins.');return;}
   var t=game.turn()==='w'?'White':'Black',s='';
   if(game.in_checkmate())s='<b>Checkmate</b> — '+(game.turn()==='w'?'Black':'White')+' wins.';
   else if(game.in_draw())s='<b>Draw.</b>';
@@ -1025,6 +1123,7 @@ function newGame(){
   $('#gameOver').classList.remove('show');
   fullSyncPieces();renderMoves();updateStatus();setEvalBar(0);paintOverlays();
   $('#accw').textContent='—';$('#accb').textContent='—';$('#acpl').textContent='';$('#revbar').style.width='0';
+  resetClocks();
   playSound('game-start');
   playerColor=$('#playas').value;
   orientation = playerColor==='w'?'white':'black';
@@ -1035,14 +1134,17 @@ function newGame(){
 /* ================= BOOT ================= */
 function boot(){
   boardExtras();
+  resetClocks(); setInterval(tickClocks,100);
   buildSquares();fullSyncPieces();renderMoves();renderLegend();updateEngineUI();
   $all('.tabs button').forEach(function(b){b.onclick=function(){$all('.tabs button').forEach(function(x){x.classList.remove('active');});b.classList.add('active');$all('.pane').forEach(function(p){p.classList.remove('active');});$('#pane-'+b.dataset.tab).classList.add('active');};});
   $('#theme').onchange=function(){applyTheme(this.value);};
-  $('#depth').oninput=function(){$('#depthval').textContent=this.value;};
-  $('#playas').onchange=function(){playerColor=this.value;orientation=playerColor==='w'?'white':'black';buildSquares();fullSyncPieces();paintOverlays();if($('#mode').value==='engine'&&game.turn()!==playerColor&&!game.game_over())engineMove();};
-  $('#flip').onclick=function(){orientation=orientation==='white'?'black':'white';buildSquares();fullSyncPieces();paintOverlays();};
+  $('#tc').onchange=function(){resetClocks();};
+  $('#mode').onchange=function(){resetClocks();renderCards();updateStatus();};
+  $('#depth').oninput=function(){$('#depthval').textContent=this.value;renderCards();};
+  $('#playas').onchange=function(){playerColor=this.value;orientation=playerColor==='w'?'white':'black';buildSquares();fullSyncPieces();paintOverlays();renderCards();if($('#mode').value==='engine'&&game.turn()!==playerColor&&!game.game_over())engineMove();};
+  $('#flip').onclick=function(){orientation=orientation==='white'?'black':'white';buildSquares();fullSyncPieces();paintOverlays();renderCards();};
   $('#sndBtn').onclick=function(){soundOn=!soundOn;this.innerHTML=soundOn?'<i class="fa-solid fa-volume-high"></i> Sound: on':'<i class="fa-solid fa-volume-xmark"></i> Sound: off';if(soundOn)playSound('move-self');};
-  $('#undo').onclick=function(){if(thinking||reviewing)return;game.undo();if($('#mode').value==='engine')game.undo();lastMove=null;viewPly=null;results=[];fullSyncPieces();renderMoves();updateStatus();paintOverlays();playSound('move-self');liveEval();};
+  $('#undo').onclick=function(){if(thinking||reviewing)return;timeLoss=null;$('#gameOver').classList.remove('show');game.undo();if($('#mode').value==='engine')game.undo();lastMove=null;viewPly=null;results=[];fullSyncPieces();renderMoves();updateStatus();paintOverlays();playSound('move-self');liveEval();};
   $('#reset').onclick=newGame;
   $('#goRematch').onclick=newGame;
   $('#goReview').onclick=function(){$('#gameOver').classList.remove('show');$all('.tabs button').forEach(function(x){x.classList.remove('active');});document.querySelector('[data-tab="review"]').classList.add('active');$all('.pane').forEach(function(p){p.classList.remove('active');});$('#pane-review').classList.add('active');runReview();};

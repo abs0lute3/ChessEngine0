@@ -1,3 +1,2 @@
-Drop your compiled Stockfish WASM worker here and name it stockfish.js (+ .wasm / .nnue next to it).
-The app auto-detects it, otherwise it falls back to CDN. You can also upload engines at runtime via the Engine tab (file / folder / .zip).
-Note: native .exe engines cannot run in browsers.
+Built-in engine: official Stockfish 17.1 (sf171-79.js + sf171-79.wasm + NNUE nets), loaded by sf-engine-worker.js.
+Requires http(s) + COOP/COEP headers (see vercel.json). For max strength use the Stockfish 19 bridge (engine-bridge.mjs / .py) instead.
